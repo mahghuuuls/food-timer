@@ -129,6 +129,7 @@ public class ClientCooldownRenderer {
     public void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
         if (event.getWorld().isRemote) {
             if (ClientCooldownTracker.hasCooldown(event.getItemStack())) {
+                event.setCancellationResult(net.minecraft.util.EnumActionResult.FAIL);
                 event.setCanceled(true);
             }
         }

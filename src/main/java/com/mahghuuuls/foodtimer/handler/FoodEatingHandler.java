@@ -15,6 +15,16 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 public class FoodEatingHandler {
 
     @SubscribeEvent
+    public void onRightClickItem(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickItem event) {
+        if (!event.getWorld().isRemote) {
+            if (CooldownPersistence.hasActiveCooldown(event.getEntityPlayer(), event.getItemStack())) {
+                event.setCancellationResult(net.minecraft.util.EnumActionResult.FAIL);
+                event.setCanceled(true);
+            }
+        }
+    }
+
+    @SubscribeEvent
     public void onItemUseStart(LivingEntityUseItemEvent.Start event) {
         EntityLivingBase entity = event.getEntityLiving();
         if (!(entity instanceof EntityPlayer)) {
