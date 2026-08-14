@@ -7,8 +7,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent;
-import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +35,9 @@ public class CooldownPersistence {
         NBTTagCompound foodCooldowns = persisted.getCompoundTag(NBT_KEY_ROOT);
         foodCooldowns.setLong(item.getRegistryName().toString(), expireWorldTime);
         persisted.setTag(NBT_KEY_ROOT, foodCooldowns);
+
+        LoggerHelper.debug("Saved persistent cooldown for '{}' on player '{}' (expires at world time {})",
+                item.getRegistryName(), player.getName(), expireWorldTime);
     }
 
     /**
@@ -63,13 +65,15 @@ public class CooldownPersistence {
                 Item item = Item.REGISTRY.getObject(new ResourceLocation(itemKey));
                 if (item != null) {
                     player.getCooldownTracker().setCooldown(item, (int) remainingTicks);
-                    LoggerHelper.debug("Restored cooldown for '{}' on player '{}' ({} ticks remaining)",
-                            itemKey, player.getName(), remainingTicks);
+                    LoggerHelper.debug("Restored cooldown for '{}' on player '{}' ({} ticks remaining, current time {}, expire time {})",
+                            itemKey, player.getName(), remainingTicks, currentWorldTime, expireWorldTime);
                 } else {
                     expiredKeys.add(itemKey);
                 }
             } else {
                 expiredKeys.add(itemKey);
+                LoggerHelper.debug("Cleared expired cooldown for '{}' on player '{}' (expired at {}, current time {})",
+                        itemKey, player.getName(), expireWorldTime, currentWorldTime);
             }
         }
 
@@ -85,13 +89,13 @@ public class CooldownPersistence {
     }
 
     @SubscribeEvent
-    public void onPlayerLoggedIn(PlayerLoggedInEvent event) {
-        restoreCooldowns(event.player);
-    }
-
-    @SubscribeEvent
-    public void onPlayerRespawn(PlayerRespawnEvent event) {
-        restoreCooldowns(event.player);
+    public void onPlayerTick(TickEvent.PlayerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END && !event.player.getEntityWorld().isRemote) {
+            // Restore on the first server tick after join/respawn when the client player is fully initialized
+            if (event.player.ticksExisted == 1) {
+                restoreCooldowns(event.player);
+            }
+        }
     }
 
     @SubscribeEvent
