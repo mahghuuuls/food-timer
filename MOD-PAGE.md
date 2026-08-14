@@ -8,7 +8,6 @@ Adds configurable consumption cooldowns and duration tooltips to foods and consu
 
 The configuration file is located at `config/foodtimer.cfg`.
 
-### Example:
 ```ini
 general {
     # Enable verbose diagnostic debug logging in server/client console output.
