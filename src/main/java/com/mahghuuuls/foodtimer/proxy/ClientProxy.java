@@ -1,5 +1,6 @@
 package com.mahghuuuls.foodtimer.proxy;
 
+import com.mahghuuuls.foodtimer.client.ClientCooldownRenderer;
 import com.mahghuuuls.foodtimer.client.ClientTooltipHandler;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
@@ -12,6 +13,7 @@ public class ClientProxy extends CommonProxy {
     public void preInit(FMLPreInitializationEvent event) {
         super.preInit(event);
         MinecraftForge.EVENT_BUS.register(new ClientTooltipHandler());
+        MinecraftForge.EVENT_BUS.register(new ClientCooldownRenderer());
     }
 
     @Override

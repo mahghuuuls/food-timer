@@ -1,8 +1,13 @@
 package com.mahghuuuls.foodtimer.handler;
 
+import com.mahghuuuls.foodtimer.config.CooldownRule;
+import com.mahghuuuls.foodtimer.config.RuleRegistry;
+import com.mahghuuuls.foodtimer.network.FoodTimerPacketHandler;
+import com.mahghuuuls.foodtimer.network.SPacketFoodCooldown;
 import com.mahghuuuls.foodtimer.util.LoggerHelper;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.Item;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -13,35 +18,105 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Manages persistence of active food cooldowns across player disconnections,
- * world saves/reloads, and respawns using player NBT.
+ * Manages server-side persistence and network synchronization of metadata-aware food cooldowns.
  */
 public class CooldownPersistence {
 
     public static final String NBT_KEY_ROOT = "FoodTimerCooldowns";
 
     /**
-     * Records an active cooldown for an item on the player's persistent NBT.
+     * Saves an active cooldown for a specific food rule on the player and sends the sync packet.
      */
-    public static void saveCooldown(EntityPlayer player, Item item, int durationTicks) {
-        if (player == null || player.getEntityWorld().isRemote || item == null || item.getRegistryName() == null || durationTicks <= 0) {
+    public static void saveCooldown(EntityPlayer player, CooldownRule rule, int durationTicks) {
+        if (player == null || player.getEntityWorld().isRemote || rule == null || durationTicks <= 0) {
             return;
         }
 
         long currentWorldTime = player.getEntityWorld().getTotalWorldTime();
         long expireWorldTime = currentWorldTime + durationTicks;
 
+        String key = formatKey(rule.getRegistryName().toString(), rule.isWildcard() ? -1 : rule.getMetadata());
+
         NBTTagCompound persisted = getOrCreatePersistedTag(player);
         NBTTagCompound foodCooldowns = persisted.getCompoundTag(NBT_KEY_ROOT);
-        foodCooldowns.setLong(item.getRegistryName().toString(), expireWorldTime);
+        foodCooldowns.setLong(key, expireWorldTime);
         persisted.setTag(NBT_KEY_ROOT, foodCooldowns);
 
+        if (player instanceof EntityPlayerMP) {
+            FoodTimerPacketHandler.INSTANCE.sendTo(
+                    new SPacketFoodCooldown(
+                            rule.getRegistryName().toString(),
+                            rule.isWildcard() ? -1 : rule.getMetadata(),
+                            durationTicks,
+                            expireWorldTime,
+                            currentWorldTime
+                    ),
+                    (EntityPlayerMP) player
+            );
+        }
+
         LoggerHelper.debug("Saved persistent cooldown for '{}' on player '{}' (expires at world time {})",
-                item.getRegistryName(), player.getName(), expireWorldTime);
+                key, player.getName(), expireWorldTime);
     }
 
     /**
-     * Restores any active cooldowns for the player upon login or respawn.
+     * Checks if the given ItemStack is currently on active cooldown for the player.
+     */
+    public static boolean hasActiveCooldown(EntityPlayer player, ItemStack stack) {
+        if (player == null || player.getEntityWorld().isRemote || stack == null || stack.isEmpty()) {
+            return false;
+        }
+
+        CooldownRule rule = RuleRegistry.findRule(stack);
+        if (rule == null) {
+            return false;
+        }
+
+        NBTTagCompound persisted = getOrCreatePersistedTag(player);
+        if (!persisted.hasKey(NBT_KEY_ROOT)) {
+            return false;
+        }
+
+        NBTTagCompound foodCooldowns = persisted.getCompoundTag(NBT_KEY_ROOT);
+        long currentWorldTime = player.getEntityWorld().getTotalWorldTime();
+
+        ResourceLocation reg = stack.getItem().getRegistryName();
+        if (reg == null) {
+            return false;
+        }
+
+        String itemKey = reg.toString();
+        int meta = stack.getMetadata();
+
+        // Check exact key first
+        String exactKey = formatKey(itemKey, meta);
+        if (foodCooldowns.hasKey(exactKey)) {
+            long expire = foodCooldowns.getLong(exactKey);
+            if (expire > currentWorldTime) {
+                return true;
+            }
+        }
+
+        // Check wildcard key
+        String wildcardKey = formatKey(itemKey, -1);
+        if (foodCooldowns.hasKey(wildcardKey)) {
+            long expire = foodCooldowns.getLong(wildcardKey);
+            if (expire > currentWorldTime) {
+                return true;
+            }
+        }
+
+        // Check legacy un-suffixed key for backwards compatibility
+        if (foodCooldowns.hasKey(itemKey)) {
+            long expire = foodCooldowns.getLong(itemKey);
+            return expire > currentWorldTime;
+        }
+
+        return false;
+    }
+
+    /**
+     * Restores active cooldowns for the player upon login or respawn and syncs to client.
      */
     public static void restoreCooldowns(EntityPlayer player) {
         if (player == null || player.getEntityWorld().isRemote) {
@@ -57,23 +132,28 @@ public class CooldownPersistence {
         long currentWorldTime = player.getEntityWorld().getTotalWorldTime();
         List<String> expiredKeys = new ArrayList<>();
 
-        for (String itemKey : foodCooldowns.getKeySet()) {
-            long expireWorldTime = foodCooldowns.getLong(itemKey);
+        for (String entryKey : foodCooldowns.getKeySet()) {
+            long expireWorldTime = foodCooldowns.getLong(entryKey);
             long remainingTicks = expireWorldTime - currentWorldTime;
 
             if (remainingTicks > 0) {
-                Item item = Item.REGISTRY.getObject(new ResourceLocation(itemKey));
-                if (item != null) {
-                    player.getCooldownTracker().setCooldown(item, (int) remainingTicks);
-                    LoggerHelper.debug("Restored cooldown for '{}' on player '{}' ({} ticks remaining, current time {}, expire time {})",
-                            itemKey, player.getName(), remainingTicks, currentWorldTime, expireWorldTime);
-                } else {
-                    expiredKeys.add(itemKey);
+                ParsedKey parsed = parseKey(entryKey);
+                if (player instanceof EntityPlayerMP) {
+                    FoodTimerPacketHandler.INSTANCE.sendTo(
+                            new SPacketFoodCooldown(
+                                    parsed.itemKey,
+                                    parsed.metadata,
+                                    (int) remainingTicks,
+                                    expireWorldTime,
+                                    currentWorldTime
+                            ),
+                            (EntityPlayerMP) player
+                    );
                 }
+                LoggerHelper.debug("Restored cooldown for '{}' on player '{}' ({} ticks remaining)",
+                        entryKey, player.getName(), remainingTicks);
             } else {
-                expiredKeys.add(itemKey);
-                LoggerHelper.debug("Cleared expired cooldown for '{}' on player '{}' (expired at {}, current time {})",
-                        itemKey, player.getName(), expireWorldTime, currentWorldTime);
+                expiredKeys.add(entryKey);
             }
         }
 
@@ -90,20 +170,17 @@ public class CooldownPersistence {
 
     @SubscribeEvent
     public void onPlayerLoggedIn(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent event) {
-        // Arm server-side tracker immediately upon login (tick 0)
         restoreCooldowns(event.player);
     }
 
     @SubscribeEvent
     public void onPlayerRespawn(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent event) {
-        // Arm server-side tracker immediately upon respawn
         restoreCooldowns(event.player);
     }
 
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase == TickEvent.Phase.END && !event.player.getEntityWorld().isRemote) {
-            // Re-sync on tick 1 when the client's EntityPlayerSP is active and ready to receive SPacketCooldown
             if (event.player.ticksExisted == 1) {
                 restoreCooldowns(event.player);
             }
@@ -119,6 +196,34 @@ public class CooldownPersistence {
                 clonePersisted.setTag(NBT_KEY_ROOT, originalPersisted.getCompoundTag(NBT_KEY_ROOT).copy());
             }
         }
+    }
+
+    private static String formatKey(String itemKey, int metadata) {
+        return itemKey + ":" + metadata;
+    }
+
+    private static class ParsedKey {
+        final String itemKey;
+        final int metadata;
+
+        ParsedKey(String itemKey, int metadata) {
+            this.itemKey = itemKey;
+            this.metadata = metadata;
+        }
+    }
+
+    private static ParsedKey parseKey(String key) {
+        int lastColon = key.lastIndexOf(':');
+        if (lastColon > 0) {
+            String suffix = key.substring(lastColon + 1);
+            try {
+                int meta = Integer.parseInt(suffix);
+                String itemKey = key.substring(0, lastColon);
+                return new ParsedKey(itemKey, meta);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return new ParsedKey(key, -1);
     }
 
     private static NBTTagCompound getOrCreatePersistedTag(EntityPlayer player) {

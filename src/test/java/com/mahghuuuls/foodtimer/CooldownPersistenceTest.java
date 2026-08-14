@@ -14,27 +14,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class CooldownPersistenceTest {
 
     @Test
-    public void testCooldownPersistenceNbtCalculation() {
+    public void testMetadataSpecificCooldownPersistenceNbtCalculation() {
         NBTTagCompound persisted = new NBTTagCompound();
         NBTTagCompound cooldowns = new NBTTagCompound();
 
         long currentWorldTime = 10000L;
-        int durationTicks = 1200; // 60s
-        long expireTime = currentWorldTime + durationTicks;
+        long regularGappleExpire = currentWorldTime + 1200; // 60s (meta 0)
+        long enchantedGappleExpire = currentWorldTime + 6000; // 300s (meta 1)
 
-        cooldowns.setLong("minecraft:golden_apple", expireTime);
+        cooldowns.setLong("minecraft:golden_apple:0", regularGappleExpire);
+        cooldowns.setLong("minecraft:golden_apple:1", enchantedGappleExpire);
         persisted.setTag(CooldownPersistence.NBT_KEY_ROOT, cooldowns);
 
-        // Simulate reconnecting 20 seconds later (400 ticks elapsed)
+        // Reconnect 20 seconds later (400 ticks elapsed)
         long reconnectWorldTime = 10400L;
-        long remaining = cooldowns.getLong("minecraft:golden_apple") - reconnectWorldTime;
-        assertEquals(800, remaining);
-        assertTrue(remaining > 0);
+        long remaining0 = cooldowns.getLong("minecraft:golden_apple:0") - reconnectWorldTime;
+        long remaining1 = cooldowns.getLong("minecraft:golden_apple:1") - reconnectWorldTime;
 
-        // Simulate reconnecting 70 seconds later (1400 ticks elapsed) -> expired
+        assertEquals(800, remaining0);
+        assertEquals(5600, remaining1);
+        assertTrue(remaining0 > 0);
+        assertTrue(remaining1 > 0);
+
+        // Reconnect 70 seconds later (1400 ticks elapsed) -> meta 0 expired, meta 1 has 4600 ticks left
         long laterWorldTime = 11400L;
-        long laterRemaining = cooldowns.getLong("minecraft:golden_apple") - laterWorldTime;
-        assertTrue(laterRemaining <= 0);
+        long laterRemaining0 = cooldowns.getLong("minecraft:golden_apple:0") - laterWorldTime;
+        long laterRemaining1 = cooldowns.getLong("minecraft:golden_apple:1") - laterWorldTime;
+
+        assertTrue(laterRemaining0 <= 0);
+        assertEquals(4600, laterRemaining1);
     }
 
     @Test
@@ -42,10 +50,10 @@ public class CooldownPersistenceTest {
         NBTTagCompound cooldowns = new NBTTagCompound();
         long currentWorldTime = 50000L;
 
-        // Golden apple: expires at 51200 (1200 ticks duration)
-        cooldowns.setLong("minecraft:golden_apple", 51200L);
-        // Enchanted golden apple: expires at 56000 (6000 ticks duration)
-        cooldowns.setLong("minecraft:enchanted_golden_apple", 56000L);
+        // Golden apple meta 0: expires at 51200 (1200 ticks duration)
+        cooldowns.setLong("minecraft:golden_apple:0", 51200L);
+        // Golden apple meta 1: expires at 56000 (6000 ticks duration)
+        cooldowns.setLong("minecraft:golden_apple:1", 56000L);
 
         // Time advanced to 52000: regular golden apple expired, enchanted has 4000 ticks left
         long simulatedLoginTime = 52000L;
@@ -60,14 +68,14 @@ public class CooldownPersistenceTest {
         }
 
         assertEquals(1, expired.size());
-        assertTrue(expired.contains("minecraft:golden_apple"));
+        assertTrue(expired.contains("minecraft:golden_apple:0"));
 
         for (String key : expired) {
             cooldowns.removeTag(key);
         }
 
-        assertFalse(cooldowns.hasKey("minecraft:golden_apple"));
-        assertTrue(cooldowns.hasKey("minecraft:enchanted_golden_apple"));
-        assertEquals(4000, cooldowns.getLong("minecraft:enchanted_golden_apple") - simulatedLoginTime);
+        assertFalse(cooldowns.hasKey("minecraft:golden_apple:0"));
+        assertTrue(cooldowns.hasKey("minecraft:golden_apple:1"));
+        assertEquals(4000, cooldowns.getLong("minecraft:golden_apple:1") - simulatedLoginTime);
     }
 }

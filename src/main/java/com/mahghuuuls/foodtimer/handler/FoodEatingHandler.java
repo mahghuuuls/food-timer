@@ -10,7 +10,7 @@ import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 
 /**
- * Common event handler listening to food and item consumption completion.
+ * Common event handler listening to food and item consumption lifecycle.
  */
 public class FoodEatingHandler {
 
@@ -27,11 +27,11 @@ public class FoodEatingHandler {
             return;
         }
 
-        if (player.getCooldownTracker().hasCooldown(itemStack.getItem())) {
+        if (CooldownPersistence.hasActiveCooldown(player, itemStack)) {
             event.setCanceled(true);
             player.resetActiveHand();
-            LoggerHelper.debug("Blocked item use start for '{}' on player '{}' (cooldown active)",
-                    itemStack.getItem().getRegistryName(), player.getName());
+            LoggerHelper.debug("Blocked item use start for '{}' meta {} on player '{}' (cooldown active)",
+                    itemStack.getItem().getRegistryName(), itemStack.getMetadata(), player.getName());
         }
     }
 
@@ -61,10 +61,10 @@ public class FoodEatingHandler {
 
         int durationTicks = rule.getDurationTicks();
         if (durationTicks > 0) {
-            player.getCooldownTracker().setCooldown(itemStack.getItem(), durationTicks);
-            CooldownPersistence.saveCooldown(player, itemStack.getItem(), durationTicks);
-            LoggerHelper.debug("Set cooldown of {} ticks ({}s) for item '{}' on player '{}'",
-                    durationTicks, rule.getDurationSeconds(), rule.getRegistryName(), player.getName());
+            CooldownPersistence.saveCooldown(player, rule, durationTicks);
+            LoggerHelper.debug("Set cooldown of {} ticks ({}s) for item '{}' meta {} on player '{}'",
+                    durationTicks, rule.getDurationSeconds(), rule.getRegistryName(),
+                    rule.isWildcard() ? "*" : rule.getMetadata(), player.getName());
         }
     }
 }
