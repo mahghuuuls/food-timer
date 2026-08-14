@@ -51,8 +51,9 @@ public class ClientCooldownRenderer {
         tessellator.draw();
 
         GlStateManager.enableTexture2D();
-        GlStateManager.enableLighting();
         GlStateManager.enableDepth();
+        GlStateManager.disableLighting();
+        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     @SubscribeEvent
@@ -71,6 +72,8 @@ public class ClientCooldownRenderer {
         int height = resolution.getScaledHeight();
         int midX = width / 2;
 
+        boolean renderedAny = false;
+
         // Main hand hotbar slots 0 to 8:
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.player.inventory.mainInventory.get(i);
@@ -79,6 +82,7 @@ public class ClientCooldownRenderer {
                 int slotX = midX - 90 + i * 20 + 3;
                 int slotY = height - 16 - 3;
                 drawCooldownOverlay(slotX, slotY, fraction);
+                renderedAny = true;
             }
         }
 
@@ -90,6 +94,12 @@ public class ClientCooldownRenderer {
             int offhandX = (primaryHand == EnumHandSide.RIGHT) ? (midX - 90 - 29 + 3) : (midX + 90 + 13 + 3);
             int offhandY = height - 16 - 3;
             drawCooldownOverlay(offhandX, offhandY, fraction);
+            renderedAny = true;
+        }
+
+        if (renderedAny) {
+            GlStateManager.disableLighting();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         }
     }
 
@@ -109,6 +119,9 @@ public class ClientCooldownRenderer {
                     }
                 }
             }
+
+            GlStateManager.disableLighting();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
         }
     }
 
