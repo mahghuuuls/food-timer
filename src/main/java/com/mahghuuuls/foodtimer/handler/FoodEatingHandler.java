@@ -15,6 +15,27 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 public class FoodEatingHandler {
 
     @SubscribeEvent
+    public void onItemUseStart(LivingEntityUseItemEvent.Start event) {
+        EntityLivingBase entity = event.getEntityLiving();
+        if (!(entity instanceof EntityPlayer)) {
+            return;
+        }
+
+        EntityPlayer player = (EntityPlayer) entity;
+        ItemStack itemStack = event.getItem();
+        if (itemStack.isEmpty()) {
+            return;
+        }
+
+        if (player.getCooldownTracker().hasCooldown(itemStack.getItem())) {
+            event.setCanceled(true);
+            player.resetActiveHand();
+            LoggerHelper.debug("Blocked item use start for '{}' on player '{}' (cooldown active)",
+                    itemStack.getItem().getRegistryName(), player.getName());
+        }
+    }
+
+    @SubscribeEvent
     public void onItemUseFinish(LivingEntityUseItemEvent.Finish event) {
         EntityLivingBase entity = event.getEntityLiving();
         if (!(entity instanceof EntityPlayer)) {

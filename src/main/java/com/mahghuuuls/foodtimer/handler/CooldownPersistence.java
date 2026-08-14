@@ -89,9 +89,21 @@ public class CooldownPersistence {
     }
 
     @SubscribeEvent
+    public void onPlayerLoggedIn(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent event) {
+        // Arm server-side tracker immediately upon login (tick 0)
+        restoreCooldowns(event.player);
+    }
+
+    @SubscribeEvent
+    public void onPlayerRespawn(net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent event) {
+        // Arm server-side tracker immediately upon respawn
+        restoreCooldowns(event.player);
+    }
+
+    @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase == TickEvent.Phase.END && !event.player.getEntityWorld().isRemote) {
-            // Restore on the first server tick after join/respawn when the client player is fully initialized
+            // Re-sync on tick 1 when the client's EntityPlayerSP is active and ready to receive SPacketCooldown
             if (event.player.ticksExisted == 1) {
                 restoreCooldowns(event.player);
             }
