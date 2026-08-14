@@ -41,6 +41,7 @@ public class FoodEatingHandler {
         int durationTicks = rule.getDurationTicks();
         if (durationTicks > 0) {
             player.getCooldownTracker().setCooldown(itemStack.getItem(), durationTicks);
+            CooldownPersistence.saveCooldown(player, itemStack.getItem(), durationTicks);
             LoggerHelper.debug("Set cooldown of {} ticks ({}s) for item '{}' on player '{}'",
                     durationTicks, rule.getDurationSeconds(), rule.getRegistryName(), player.getName());
         }
