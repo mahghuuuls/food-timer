@@ -12,10 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exact-metadata and wildcard food rules that override all-food policies, including zero-second exclusions.
 - Server-authoritative policy synchronization so multiplayer tooltips reflect the server's cooldown rules while retaining each client's local tooltip prefix and visibility settings.
 
+### Changed
+- Expanded generated configuration comments to explain each policy, its related values, override precedence, and zero-second exclusions.
+
 ### Fixed
 - Active cooldowns remain enforceable across restarts and later policy or rule changes.
 - Client reconnects safely clear and replace synchronized server policy state.
 - Dedicated servers synchronize policy without loading client-only classes.
+- Removed inactive Mixin manifest declarations that could cause startup failures in Mixin-enabled modpacks.
 
 ## [1.0.0] - 2026-08-14
 

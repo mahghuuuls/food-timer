@@ -1,24 +1,41 @@
 # Food Timer
 
-A lightweight Minecraft 1.12.2 mod that adds configurable item cooldowns and duration tooltips to foods and consumables, preventing food spamming in combat and survival.
+Food Timer is a Minecraft 1.12.2 mod that adds server-enforced consumption cooldowns, duration tooltips, and cooldown overlays to foods and configured consumables.
+
+Releases are available on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/food-timer). The source repository is [mahghuuuls/food-timer](https://github.com/mahghuuuls/food-timer).
 
 ## Features
 
-- **Configurable Item Cooldowns**: Enforces a per-player cooldown after consuming configured foods or consumables.
-- **Variant & Metadata Support**: Distinguishes items with shared IDs via metadata (e.g., standard Golden Apple vs. Enchanted Golden Apple).
-- **Native Visual Feedback**: Displays Minecraft's native radial cooldown sweep overlay on item stacks.
-- **Duration Tooltips**: Appends formatted cooldown duration details to hovered items.
-- **Zero External Dependencies**: Standard Forge 1.12.2 and Cleanroom compatible without third-party APIs.
+- Three cooldown policies: configured items only, one fixed duration for all standard foods, or a duration scaled by restored hunger points.
+- Exact-metadata and wildcard rules that override the selected all-food policy. A zero-second rule excludes the matching item.
+- Per-player cooldowns that remain active across reconnects, respawns, world reloads, and server restarts.
+- Server-authoritative multiplayer behavior and tooltips.
+- Native-style cooldown overlays in the hotbar and inventory, plus configurable duration tooltips.
+- Standard Forge and Cleanroom support without third-party runtime dependencies. The verified baselines are Forge 14.23.5.2847 and Cleanroom 0.6.11-alpha; other permitted Minecraft 1.12.2 Forge builds have not all been individually verified.
 
-## Default Configuration
+## Installation
 
-- **Golden Apple (`minecraft:golden_apple:0`)**: 60 seconds (1 minute)
-- **Enchanted Golden Apple (`minecraft:golden_apple:1`)**: 300 seconds (5 minutes)
-- All other items have no cooldown unless added to `config/foodtimer.cfg`.
+Install the mod on both the client and server. For singleplayer, install it in the client instance.
+
+## Configuration
+
+Food Timer creates `config/foodtimer.cfg`. Gameplay configuration is owned by the logical server, and changes require a server or integrated-server restart.
+
+| Key | Purpose |
+| --- | --- |
+| `cooldownPolicy` | `CONFIGURED_ONLY` keeps the original behavior. `FIXED_ALL_FOODS` applies one duration to standard foods. `SCALED_ALL_FOODS` multiplies restored hunger points by a configured number of seconds. |
+| `fixedFoodCooldownSeconds` | Global duration used by `FIXED_ALL_FOODS` when no item rule matches. |
+| `secondsPerHungerPoint` | Multiplier used by `SCALED_ALL_FOODS` when no item rule matches. |
+| `foodCooldowns` | Rules in the form `modid:item[:metadata]=seconds`. Under all-food policies these are overrides; under `CONFIGURED_ONLY` they are the complete cooldown list. |
+| `enableTooltips` | Enables or disables duration tooltips on that client. |
+| `tooltipPrefix` | Sets the tooltip text prefix on that client. |
+| `enableDebugLogging` | Enables bounded diagnostic logging. |
+
+An exact metadata rule takes precedence over a wildcard rule. Omitting metadata or using `*` matches every metadata variant, and a duration of `0` excludes the match from cooldowns. The default policy is `CONFIGURED_ONLY`, with standard and enchanted Golden Apples set to 60 and 300 seconds respectively.
 
 ## Building from Source
 
-This project uses RetroFuturaGradle and Gradle wrapper.
+This project uses RetroFuturaGradle and the Gradle wrapper.
 
 ```bash
 # Linux / macOS
@@ -28,7 +45,7 @@ This project uses RetroFuturaGradle and Gradle wrapper.
 .\gradlew.bat clean build
 ```
 
-Built artifacts will be placed in `build/libs/`.
+Built artifacts are placed in `build/libs/`.
 
 ## License
 
