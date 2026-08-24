@@ -11,6 +11,8 @@ public class SPacketFoodCooldown implements IMessage {
     private int durationTicks;
     private long expireWorldTime;
     private long currentWorldTime;
+    private boolean valid;
+    private String validationError;
 
     public SPacketFoodCooldown() {
     }
@@ -21,19 +23,39 @@ public class SPacketFoodCooldown implements IMessage {
         this.durationTicks = durationTicks;
         this.expireWorldTime = expireWorldTime;
         this.currentWorldTime = currentWorldTime;
+        validate();
     }
 
     @Override
     public void fromBytes(ByteBuf buf) {
-        this.itemKey = ByteBufUtils.readUTF8String(buf);
-        this.metadata = buf.readInt();
-        this.durationTicks = buf.readInt();
-        this.expireWorldTime = buf.readLong();
-        this.currentWorldTime = buf.readLong();
+        valid = false;
+        validationError = null;
+        try {
+            this.itemKey = ByteBufUtils.readUTF8String(buf);
+            this.metadata = buf.readInt();
+            this.durationTicks = buf.readInt();
+            this.expireWorldTime = buf.readLong();
+            this.currentWorldTime = buf.readLong();
+            if (buf.isReadable()) {
+                throw new IllegalArgumentException("trailing active-cooldown data");
+            }
+            validate();
+        } catch (RuntimeException malformed) {
+            valid = false;
+            validationError = malformed.getMessage() == null
+                    ? malformed.getClass().getSimpleName()
+                    : malformed.getMessage();
+            if (buf.isReadable()) {
+                buf.skipBytes(buf.readableBytes());
+            }
+        }
     }
 
     @Override
     public void toBytes(ByteBuf buf) {
+        if (!valid) {
+            throw new IllegalStateException("Cannot encode an invalid active cooldown");
+        }
         ByteBufUtils.writeUTF8String(buf, itemKey);
         buf.writeInt(metadata);
         buf.writeInt(durationTicks);
@@ -59,5 +81,29 @@ public class SPacketFoodCooldown implements IMessage {
 
     public long getCurrentWorldTime() {
         return currentWorldTime;
+    }
+
+    public boolean isValid() {
+        return valid;
+    }
+
+    public String getValidationError() {
+        return validationError;
+    }
+
+    private void validate() {
+        if (!NetworkValidation.isCanonicalRegistryName(itemKey)) {
+            throw new IllegalArgumentException("non-canonical item key");
+        }
+        if (metadata < -1) {
+            throw new IllegalArgumentException("invalid metadata");
+        }
+        if (durationTicks <= 0) {
+            throw new IllegalArgumentException("invalid duration");
+        }
+        if (expireWorldTime <= currentWorldTime) {
+            throw new IllegalArgumentException("expired active cooldown");
+        }
+        valid = true;
     }
 }

@@ -1,110 +1,65 @@
 package com.mahghuuuls.foodtimer.config;
 
+import com.mahghuuuls.foodtimer.policy.CooldownPolicy;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Pre-indexed registry storing active cooldown rules for O(1) item lookup.
+ * Compatibility facade for explicit override lookup while client tooltip synchronization is introduced.
+ * Gameplay policy resolution belongs to the immutable snapshot and CooldownResolver.
  */
 public final class RuleRegistry {
 
-    private static final Map<ResourceLocation, List<CooldownRule>> RULES_BY_ITEM = new HashMap<>();
+    private static volatile CooldownConfigSnapshot snapshot = emptySnapshot();
 
     private RuleRegistry() {
     }
 
-    /**
-     * Clears all registered rules.
-     */
-    public static synchronized void clear() {
-        RULES_BY_ITEM.clear();
+    public static void install(CooldownConfigSnapshot newSnapshot) {
+        snapshot = newSnapshot == null ? emptySnapshot() : newSnapshot;
     }
 
-    /**
-     * Registers a new cooldown rule.
-     *
-     * @param rule The rule to register.
-     */
-    public static synchronized void register(CooldownRule rule) {
-        if (rule == null) {
-            return;
-        }
-        RULES_BY_ITEM.computeIfAbsent(rule.getRegistryName(), k -> new ArrayList<>()).add(rule);
+    public static void clear() {
+        snapshot = emptySnapshot();
     }
 
-    /**
-     * Finds a matching rule for the specified item and metadata.
-     * Specific metadata matches take precedence over wildcard rules.
-     *
-     * @param registryName The item's resource location registry name.
-     * @param metadata     The item's metadata value.
-     * @return The matching CooldownRule, or null if no rule applies.
-     */
-    public static synchronized CooldownRule findRule(ResourceLocation registryName, int metadata) {
-        if (registryName == null) {
-            return null;
-        }
-
-        List<CooldownRule> rules = RULES_BY_ITEM.get(registryName);
-        if (rules == null || rules.isEmpty()) {
-            return null;
-        }
-
-        CooldownRule wildcardMatch = null;
-        for (CooldownRule rule : rules) {
-            if (rule.getMetadata() == metadata) {
-                return rule; // Exact match takes precedence immediately
-            } else if (rule.isWildcard()) {
-                wildcardMatch = rule;
-            }
-        }
-
-        return wildcardMatch;
+    public static CooldownRule findRule(ResourceLocation registryName, int metadata) {
+        return registryName == null ? null : snapshot.findOverride(registryName, metadata);
     }
 
-    /**
-     * Convenience method to find a matching rule for a given ItemStack.
-     *
-     * @param stack The item stack.
-     * @return The matching CooldownRule, or null if stack is empty/unmatched.
-     */
     public static CooldownRule findRule(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
             return null;
         }
         Item item = stack.getItem();
-        if (item == null) {
-            return null;
-        }
-        ResourceLocation registryName = item.getRegistryName();
-        if (registryName == null) {
-            return null;
-        }
-        return findRule(registryName, stack.getMetadata());
+        ResourceLocation registryName = item == null ? null : item.getRegistryName();
+        return registryName == null ? null : findRule(registryName, stack.getMetadata());
     }
 
-    /**
-     * Checks if any rule exists for the specified item and metadata.
-     */
     public static boolean hasRule(ResourceLocation registryName, int metadata) {
         return findRule(registryName, metadata) != null;
     }
 
-    /**
-     * Returns an unmodifiable view of all registered rules by item.
-     */
-    public static synchronized Map<ResourceLocation, List<CooldownRule>> getRegisteredRules() {
-        Map<ResourceLocation, List<CooldownRule>> unmodifiable = new HashMap<>();
-        for (Map.Entry<ResourceLocation, List<CooldownRule>> entry : RULES_BY_ITEM.entrySet()) {
-            unmodifiable.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+    public static Map<ResourceLocation, List<CooldownRule>> getRegisteredRules() {
+        Map<ResourceLocation, List<CooldownRule>> result = new LinkedHashMap<>();
+        for (CooldownRule rule : snapshot.getOverrides()) {
+            result.computeIfAbsent(rule.getRegistryName(), ignored -> new ArrayList<>()).add(rule);
         }
-        return Collections.unmodifiableMap(unmodifiable);
+        Map<ResourceLocation, List<CooldownRule>> immutable = new LinkedHashMap<>();
+        for (Map.Entry<ResourceLocation, List<CooldownRule>> entry : result.entrySet()) {
+            immutable.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+        }
+        return Collections.unmodifiableMap(immutable);
+    }
+
+    private static CooldownConfigSnapshot emptySnapshot() {
+        return new CooldownConfigSnapshot(CooldownPolicy.CONFIGURED_ONLY, 30, 5, Collections.emptyList());
     }
 }

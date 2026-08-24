@@ -1,6 +1,7 @@
 package com.mahghuuuls.foodtimer.config;
 
 import net.minecraft.util.ResourceLocation;
+import com.mahghuuuls.foodtimer.policy.CooldownResolver;
 import java.util.Objects;
 
 /**
@@ -17,9 +18,15 @@ public final class CooldownRule {
 
     public CooldownRule(ResourceLocation registryName, int metadata, int durationSeconds) {
         this.registryName = Objects.requireNonNull(registryName, "registryName cannot be null");
+        if (metadata < WILDCARD_META) {
+            throw new IllegalArgumentException("metadata out of range: " + metadata);
+        }
+        if (durationSeconds < 0 || durationSeconds > CooldownResolver.MAX_DURATION_SECONDS) {
+            throw new IllegalArgumentException("durationSeconds out of range: " + durationSeconds);
+        }
         this.metadata = metadata;
-        this.durationSeconds = Math.max(0, durationSeconds);
-        this.durationTicks = this.durationSeconds * 20;
+        this.durationSeconds = durationSeconds;
+        this.durationTicks = Math.multiplyExact(durationSeconds, CooldownResolver.TICKS_PER_SECOND);
     }
 
     public ResourceLocation getRegistryName() {

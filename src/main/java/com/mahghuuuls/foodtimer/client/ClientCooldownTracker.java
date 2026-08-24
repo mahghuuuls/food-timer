@@ -44,6 +44,11 @@ public class ClientCooldownTracker {
 
     public static void updateCooldown(String itemKey, int metadata, int durationTicks, int remainingTicks) {
         long currentClientWorldTime = (Minecraft.getMinecraft().world != null) ? Minecraft.getMinecraft().world.getTotalWorldTime() : 0L;
+        updateCooldownAtTime(itemKey, metadata, durationTicks, remainingTicks, currentClientWorldTime);
+    }
+
+    static void updateCooldownAtTime(String itemKey, int metadata, int durationTicks,
+                                     int remainingTicks, long currentClientWorldTime) {
         String key = itemKey + ":" + metadata;
         if (remainingTicks <= 0) {
             ACTIVE_COOLDOWNS.remove(key);
@@ -57,6 +62,11 @@ public class ClientCooldownTracker {
     }
 
     public static Entry getEntry(ItemStack stack) {
+        long worldTime = (Minecraft.getMinecraft().world != null) ? Minecraft.getMinecraft().world.getTotalWorldTime() : 0L;
+        return getEntry(stack, worldTime);
+    }
+
+    static Entry getEntry(ItemStack stack, long worldTime) {
         if (stack.isEmpty() || stack.getItem().getRegistryName() == null) {
             return null;
         }
@@ -64,17 +74,15 @@ public class ClientCooldownTracker {
         String itemKey = reg.toString();
         int meta = stack.getMetadata();
 
-        long worldTime = (Minecraft.getMinecraft().world != null) ? Minecraft.getMinecraft().world.getTotalWorldTime() : 0L;
-
         // Check exact metadata first
         String exactKey = itemKey + ":" + meta;
         Entry exact = ACTIVE_COOLDOWNS.get(exactKey);
         if (exact != null) {
             if (exact.isExpired(worldTime)) {
                 ACTIVE_COOLDOWNS.remove(exactKey);
-                return null;
+            } else {
+                return exact;
             }
-            return exact;
         }
 
         // Check wildcard (-1)

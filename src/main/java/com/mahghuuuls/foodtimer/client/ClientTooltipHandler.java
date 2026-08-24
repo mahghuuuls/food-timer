@@ -1,8 +1,9 @@
 package com.mahghuuuls.foodtimer.client;
 
-import com.mahghuuuls.foodtimer.config.CooldownRule;
 import com.mahghuuuls.foodtimer.config.ModConfig;
-import com.mahghuuuls.foodtimer.config.RuleRegistry;
+import com.mahghuuuls.foodtimer.config.CooldownConfigSnapshot;
+import com.mahghuuuls.foodtimer.policy.CooldownDecision;
+import com.mahghuuuls.foodtimer.policy.CooldownResolver;
 import com.mahghuuuls.foodtimer.util.TimeFormatter;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.text.TextFormatting;
@@ -25,13 +26,18 @@ public class ClientTooltipHandler {
             return;
         }
 
-        CooldownRule rule = RuleRegistry.findRule(stack);
-        if (rule == null) {
+        CooldownDecision decision = resolveAuthoritativeDecision(stack);
+        if (!decision.hasCooldown()) {
             return;
         }
 
-        String formattedTime = TimeFormatter.format(rule.getDurationSeconds());
+        String formattedTime = TimeFormatter.format(decision.getDurationSeconds());
         String tooltipLine = TextFormatting.GRAY + ModConfig.tooltipPrefix + TextFormatting.GOLD + formattedTime;
         event.getToolTip().add(tooltipLine);
+    }
+
+    static CooldownDecision resolveAuthoritativeDecision(ItemStack stack) {
+        CooldownConfigSnapshot snapshot = ClientPolicyState.getSnapshot();
+        return snapshot == null ? CooldownDecision.none() : CooldownResolver.resolve(snapshot, stack);
     }
 }

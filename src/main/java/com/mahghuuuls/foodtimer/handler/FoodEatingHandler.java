@@ -1,7 +1,8 @@
 package com.mahghuuuls.foodtimer.handler;
 
-import com.mahghuuuls.foodtimer.config.CooldownRule;
-import com.mahghuuuls.foodtimer.config.RuleRegistry;
+import com.mahghuuuls.foodtimer.config.ModConfig;
+import com.mahghuuuls.foodtimer.policy.CooldownDecision;
+import com.mahghuuuls.foodtimer.policy.CooldownResolver;
 import com.mahghuuuls.foodtimer.util.LoggerHelper;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
@@ -64,17 +65,23 @@ public class FoodEatingHandler {
             return;
         }
 
-        CooldownRule rule = RuleRegistry.findRule(itemStack);
-        if (rule == null) {
-            return;
+        CooldownDecision decision = CooldownResolver.resolve(ModConfig.getGameplaySnapshot(), itemStack);
+        if (decision.hasCooldown()) {
+            CooldownPersistence.saveCooldown(player, decision);
         }
 
-        int durationTicks = rule.getDurationTicks();
-        if (durationTicks > 0) {
-            CooldownPersistence.saveCooldown(player, rule, durationTicks);
-            LoggerHelper.debug("Set cooldown of {} ticks ({}s) for item '{}' meta {} on player '{}'",
-                    durationTicks, rule.getDurationSeconds(), rule.getRegistryName(),
-                    rule.isWildcard() ? "*" : rule.getMetadata(), player.getName());
-        }
+        String persistenceScope = decision.hasCooldown() || decision.isExcluded()
+                ? Integer.toString(decision.getMetadata())
+                : "none";
+        LoggerHelper.debug(
+                "Resolved completed use for player '{}' item '{}' meta {}: outcome={}, source={}, duration={}s, scopeMeta={}",
+                player.getName(),
+                itemStack.getItem().getRegistryName(),
+                itemStack.getMetadata(),
+                decision.getOutcome(),
+                decision.getSource(),
+                decision.getDurationSeconds(),
+                persistenceScope
+        );
     }
 }
