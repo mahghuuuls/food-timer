@@ -222,16 +222,51 @@ jar {
         if (propertyBool('use_access_transformer')) {
             attribute_map['FMLAT'] = propertyString('access_transformer_locations')
         }
-        def mixinConfigs = propertyStringList('mixin_configs')
-        if (!mixinConfigs.isEmpty()) {
-            attribute_map['MixinConfigs'] = mixinConfigs.join(',')
-        }
-        def mixinConnectorClass = propertyString('mixin_connector_class')
-        if (!mixinConnectorClass.isEmpty()) {
-            attribute_map['MixinConnector'] = mixinConnectorClass
+        if (propertyBool('use_mixins')) {
+            def mixinConfigs = propertyStringList('mixin_configs')
+            if (!mixinConfigs.isEmpty()) {
+                attribute_map['MixinConfigs'] = mixinConfigs.join(',')
+            }
+            def mixinConnectorClass = propertyString('mixin_connector_class')
+            if (!mixinConnectorClass.isEmpty()) {
+                attribute_map['MixinConnector'] = mixinConnectorClass
+            }
         }
         attributes(attribute_map)
     }
+}
+
+def verifyJarManifest = tasks.register('verifyJarManifest') {
+    dependsOn tasks.named('jar')
+    inputs.file(tasks.named('jar').flatMap { it.archiveFile })
+
+    doLast {
+        def archive = tasks.named('jar').get().archiveFile.get().asFile
+        def jarFile = new java.util.jar.JarFile(archive)
+        try {
+            def attributes = jarFile.manifest.mainAttributes
+            def advertisedConfigs = attributes.getValue('MixinConfigs')
+            def advertisedConnector = attributes.getValue('MixinConnector')
+
+            if (!propertyBool('use_mixins')) {
+                if (advertisedConfigs != null || advertisedConnector != null) {
+                    throw new GradleException('Mixin manifest attributes must be absent when use_mixins=false.')
+                }
+            } else if (advertisedConfigs != null) {
+                advertisedConfigs.split(',').each { configName ->
+                    if (jarFile.getEntry(configName.trim()) == null) {
+                        throw new GradleException("Advertised mixin config '${configName.trim()}' is missing from ${archive.name}.")
+                    }
+                }
+            }
+        } finally {
+            jarFile.close()
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn verifyJarManifest
 }
 
 idea {

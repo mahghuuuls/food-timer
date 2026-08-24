@@ -106,6 +106,22 @@ public class ModConfigForgeIntegrationTest {
         assertTrue(appender.contains("Invalid secondsPerHungerPoint '0'"));
     }
 
+    @Test
+    public void freshConfigExplainsPolicyAndOverrideInteractions() throws Exception {
+        minecraftHomeField.set(null, temporaryDirectory.toFile());
+        Path configPath = temporaryDirectory.resolve("foodtimer-comments.cfg");
+
+        ModConfig.init(configPath.toFile());
+
+        String generated = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
+        assertTrue(generated.contains("CONFIGURED_ONLY: only matching foodCooldowns entries apply"));
+        assertTrue(generated.contains("FIXED_ALL_FOODS: standard foods use fixedFoodCooldownSeconds"));
+        assertTrue(generated.contains("SCALED_ALL_FOODS: standard foods use restored hunger points times secondsPerHungerPoint"));
+        assertTrue(generated.contains("Under CONFIGURED_ONLY, these are the complete cooldown list"));
+        assertTrue(generated.contains("Under either all-food policy, they override the global result"));
+        assertTrue(generated.contains("Zero means no cooldown and excludes that match from either all-food policy"));
+    }
+
     private static final class RecordingAppender extends AbstractAppender {
         private final List<String> messages = new ArrayList<>();
 

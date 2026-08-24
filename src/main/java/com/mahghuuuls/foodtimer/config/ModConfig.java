@@ -70,7 +70,10 @@ public final class ModConfig {
                     CATEGORY_GENERAL,
                     "cooldownPolicy",
                     CooldownPolicy.CONFIGURED_ONLY.name(),
-                    "Cooldown policy: CONFIGURED_ONLY, FIXED_ALL_FOODS, or SCALED_ALL_FOODS.\n" +
+                    "Controls how Food Timer chooses cooldowns.\n" +
+                            "CONFIGURED_ONLY: only matching foodCooldowns entries apply (default/released behavior).\n" +
+                            "FIXED_ALL_FOODS: standard foods use fixedFoodCooldownSeconds unless foodCooldowns overrides them.\n" +
+                            "SCALED_ALL_FOODS: standard foods use restored hunger points times secondsPerHungerPoint unless overridden.\n" +
                             "Changes require a server or integrated-server restart."
             );
             cooldownPolicy = parsePolicy(policyProperty.getString());
@@ -80,7 +83,7 @@ public final class ModConfig {
                     CATEGORY_GENERAL,
                     "fixedFoodCooldownSeconds",
                     DEFAULT_FIXED_FOOD_COOLDOWN_SECONDS,
-                    "Cooldown in seconds for qualifying foods under FIXED_ALL_FOODS.\n" +
+                    "Cooldown in seconds used only by FIXED_ALL_FOODS when no foodCooldowns override matches.\n" +
                             "Valid range: 1 to " + CooldownResolver.MAX_DURATION_SECONDS + ". Restart required."
             );
             fixedFoodCooldownSeconds = parseBoundedPositiveInt(
@@ -94,7 +97,7 @@ public final class ModConfig {
                     CATEGORY_GENERAL,
                     "secondsPerHungerPoint",
                     DEFAULT_SECONDS_PER_HUNGER_POINT,
-                    "Seconds per hunger point under SCALED_ALL_FOODS.\n" +
+                    "Multiplier used only by SCALED_ALL_FOODS when no foodCooldowns override matches.\n" +
                             "Example: 5 gives a 20-second cooldown to a food restoring 4 hunger points. Restart required."
             );
             secondsPerHungerPoint = parseBoundedPositiveInt(
@@ -107,8 +110,10 @@ public final class ModConfig {
                     CATEGORY_GENERAL,
                     "foodCooldowns",
                     DEFAULT_FOOD_COOLDOWNS,
-                    "Item cooldown overrides in the format 'modid:item[:metadata]=seconds'.\n" +
-                            "Omit metadata or use '*' for every variant. Zero excludes a matching item from global policies.\n" +
+                    "Rules in the format 'modid:item[:metadata]=seconds'.\n" +
+                            "Under CONFIGURED_ONLY, these are the complete cooldown list. Under either all-food policy, they override the global result.\n" +
+                            "Exact metadata wins over an omitted-metadata or '*' wildcard; the last valid duplicate wins.\n" +
+                            "Zero means no cooldown and excludes that match from either all-food policy.\n" +
                             "Example: 'minecraft:golden_apple:0=60'. Restart required."
             );
             foodCooldowns = foodCooldownProperty.getStringList();
